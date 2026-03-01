@@ -1,0 +1,51 @@
+# Mac OS
+.DS_Store
+
+# NPM
+node_modules/
+scratch-gui/node_modules/
+npm-*
+
+# Testing
+/.nyc_output
+/coverage
+
+# Build
+scratch-gui/build/
+/dist
+/.opt-in
+
+# Generated translation files
+/translations
+/locale
+
+# Other generated source
+/src/generated
+
+# Downloaded during "npm install"
+/static/microbit
+
+# for act
+.secrets
+
+/log
+/instance
+
+/instance/*.db
+/instance/*.sqlite3
+*.db
+*.sqlite3
+.vscode/
+
+/config
+*.config
+*.conf
+
+# 本地开发日志文件，不建议提交
+/logs
+*.log
+*.log.*
+backend/__pycache__/
+
+# Python venv
+backend/venv/*

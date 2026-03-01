@@ -1,0 +1,203 @@
+.collaboration-manager {
+    position: relative;
+}
+
+.collaboration-panel {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    width: 280px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    padding: 15px;
+}
+
+.collaboration-panel h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+/* 等待登录状态样式 */
+.collaboration-waiting {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+.collaboration-waiting h3 {
+    color: white;
+    border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+.collaboration-invite-hint {
+    font-size: 16px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.collaboration-login-hint {
+    font-size: 14px;
+    margin: 10px 0;
+    opacity: 0.9;
+}
+
+.collaboration-feasibility-hint {
+    font-size: 13px;
+    margin: 10px 0;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.collaboration-info-icon {
+    font-size: 18px;
+}
+
+.collaboration-connecting {
+    font-size: 14px;
+    margin-top: 15px;
+    padding: 12px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: pulseConnect 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseConnect {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.collaboration-spinner {
+    font-size: 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.collaboration-error-hint {
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-top: 10px;
+}
+
+.collaboration-login-arrow {
+    background-color: rgba(255, 255, 255, 0.3);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 15px;
+    animation: pulseArrow 2s ease-in-out infinite;
+    cursor: pointer;
+}
+
+@keyframes pulseArrow {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.9;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 1;
+    }
+}
+
+.collaboration-status {
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.collaboration-status-disconnected {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.collaboration-status-connecting {
+    background-color: #fff3e0;
+    color: #ef6c00;
+}
+
+.collaboration-status-connected {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+}
+
+.collaboration-status-text {
+    display: block;
+}
+
+.collaboration-error {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
+    color: #c62828;
+}
+
+.connected-users {
+    margin-top: 15px;
+}
+
+.connected-users h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #666;
+}
+
+.connected-users ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.connected-users li {
+    padding: 5px 0;
+    font-size: 13px;
+    color: #333;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.connected-users li:last-child {
+    border-bottom: none;
+}
+
+.connected-users li.current-user {
+    font-weight: bold;
+    color: #4a90e2;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .collaboration-panel {
+        width: 200px;
+        right: 10px;
+        top: 50px;
+    }
+}
