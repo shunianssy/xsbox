@@ -1,13 +1,14 @@
 import createThumbnail from './thumbnail';
+import {withProjectExportAuthorization} from '../tw-export-guard';
 
 const spritePayload = (id, vm) => {
     const target = vm.runtime.getTargetById(id);
     if (!target) return null;
 
-    return vm.exportSprite(
+    return withProjectExportAuthorization(() => vm.exportSprite(
         id,
         'base64'
-    ).then(zippedSprite => {
+    )).then(zippedSprite => {
         const payload = {
             type: 'sprite',
             name: target.sprite.name,

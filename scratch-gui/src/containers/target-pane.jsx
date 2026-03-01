@@ -24,6 +24,7 @@ import randomizeSpritePosition from '../lib/randomize-sprite-position';
 import downloadBlob from '../lib/download-blob';
 import log from '../lib/log';
 import {placeInViewport} from '../lib/backpack/code-payload.js';
+import {withProjectExportAuthorization} from '../lib/tw-export-guard';
 
 class TargetPane extends React.Component {
     constructor (props) {
@@ -96,7 +97,7 @@ class TargetPane extends React.Component {
         const saveLink = document.createElement('a');
         document.body.appendChild(saveLink);
 
-        this.props.vm.exportSprite(id).then(content => {
+        withProjectExportAuthorization(() => this.props.vm.exportSprite(id)).then(content => {
             downloadBlob(`${spriteName}.sprite3`, content);
         });
     }

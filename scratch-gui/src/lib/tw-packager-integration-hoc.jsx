@@ -3,6 +3,7 @@ import {connect} from 'react-redux';
 import PropTypes from 'prop-types';
 import log from './log';
 import {getIsShowingProject} from '../reducers/project-state';
+import {withProjectExportAuthorization} from './tw-export-guard';
 
 const PACKAGER_URL = 'https://packager.turbowarp.org';
 const PACKAGER_ORIGIN = PACKAGER_URL;
@@ -46,7 +47,7 @@ const PackagerIntegrationHOC = function (WrappedComponent) {
                 }
             }, e.origin);
 
-            this.props.vm.saveProjectSb3('arraybuffer')
+            withProjectExportAuthorization(() => this.props.vm.saveProjectSb3('arraybuffer'))
                 .then(buffer => {
                     const name = `${this.props.reduxProjectTitle}.sb3`;
                     e.source.postMessage({

@@ -353,20 +353,51 @@ const CollaborationManager = forwardRef(({ vm, onCollaborationStart, onCollabora
             // 创建合并后的blocks对象，从远程开始（远程版本优先）
             const mergedBlocks = { ...remoteBlocks };
 
+            // 事件帽子积木在多人协作时若直接采用远程坐标，容易出现“放下后飞到别处”
+            // 对双方都存在的 event_* 顶层积木，优先保留本地坐标，避免随机跳动。
+            const isTopLevelEventBlock = block => (
+                block &&
+                block.topLevel &&
+                typeof block.opcode === 'string' &&
+                block.opcode.startsWith('event_')
+            );
+
             // 添加本地独有的积木（远程没有的）
             let addedLocalBlocks = 0;
-            let updatedBlocks = 0;
+            let preservedLocalEventPositions = 0;
             Object.keys(localBlocks).forEach(blockId => {
-                if (!mergedBlocks[blockId]) {
+                const localBlock = localBlocks[blockId];
+                const remoteBlock = mergedBlocks[blockId];
+
+                if (!remoteBlock) {
                     // 本地独有的积木，添加到合并结果
-                    mergedBlocks[blockId] = localBlocks[blockId];
+                    mergedBlocks[blockId] = localBlock;
                     addedLocalBlocks++;
+                    return;
                 }
-                // 如果远程也有这个积木，已经使用远程版本，不需要额外处理
+
+                // 双方都有该积木时，仅对 event_* 顶层积木保留本地 x/y
+                if (
+                    isTopLevelEventBlock(localBlock) &&
+                    isTopLevelEventBlock(remoteBlock) &&
+                    Number.isFinite(localBlock.x) &&
+                    Number.isFinite(localBlock.y)
+                ) {
+                    mergedBlocks[blockId] = {
+                        ...remoteBlock,
+                        x: localBlock.x,
+                        y: localBlock.y
+                    };
+                    preservedLocalEventPositions++;
+                }
             });
 
             merged.blocks = mergedBlocks;
-            console.log(`[协作] 精灵 ${localTarget.name} 合并结果: 保留 ${addedLocalBlocks} 个本地独有积木, 使用 ${Object.keys(remoteBlocks).length} 个远程积木`);
+            console.log(
+                `[协作] 精灵 ${localTarget.name} 合并结果: 保留 ${addedLocalBlocks} 个本地独有积木, ` +
+                `使用 ${Object.keys(remoteBlocks).length} 个远程积木, ` +
+                `保留 ${preservedLocalEventPositions} 个事件积木本地坐标`
+            );
         }
 
         // 合并变量（variables）

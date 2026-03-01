@@ -14,6 +14,7 @@ import {
     projectError
 } from '../reducers/project-state';
 import log from './log';
+import {guardVMExportMethods} from './tw-export-guard';
 
 /**
  * List of fonts that could be used by security prompts.
@@ -39,7 +40,10 @@ const vmManagerHOC = function (WrappedComponent) {
         }
         componentDidMount () {
             if (!this.props.vm.initialized) {
-                window.vm = this.props.vm;
+                if (process.env.NODE_ENV !== 'production') {
+                    window.vm = this.props.vm;
+                }
+                guardVMExportMethods(this.props.vm);
                 try {
                     this.audioEngine = new AudioEngine();
                     this.props.vm.attachAudioEngine(this.audioEngine);

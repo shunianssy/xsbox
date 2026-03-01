@@ -9,6 +9,7 @@ import {showStandardAlert, showAlertWithTimeout} from '../reducers/alerts';
 import {setFileHandle} from '../reducers/tw';
 import {getIsShowingProject} from '../reducers/project-state';
 import log from '../lib/log';
+import {withProjectExportAuthorization} from '../lib/tw-export-guard';
 
 // from sb-file-uploader-hoc.jsx
 const getProjectTitleFromFilename = fileInputFilename => {
@@ -86,7 +87,7 @@ class SB3Downloader extends React.Component {
             return;
         }
         this.startedSaving();
-        this.props.saveProjectSb3().then(content => {
+        withProjectExportAuthorization(() => this.props.saveProjectSb3()).then(content => {
             this.finishedSaving();
             downloadBlob(this.props.projectFilename, content);
         });
@@ -142,7 +143,7 @@ class SB3Downloader extends React.Component {
         await new Promise((resolve, reject) => {
             // Projects can be very large, so we'll utilize JSZip's stream API to avoid having the
             // entire sb3 in memory at the same time.
-            const jszipStream = this.props.saveProjectSb3Stream();
+            const jszipStream = withProjectExportAuthorization(() => this.props.saveProjectSb3Stream());
 
             const abortController = new AbortController();
             jszipStream.on('error', error => {
