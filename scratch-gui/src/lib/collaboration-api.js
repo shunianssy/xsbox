@@ -169,12 +169,15 @@ class CollaborationAPI {
             try {
                 this.socket.send(JSON.stringify(message));
                 console.log('[协作API] 发送消息:', message.type);
+                return true;
             } catch (error) {
                 console.error('[协作API] 发送WebSocket消息错误:', error);
+                return false;
             }
-        } else {
-            console.error('[协作API] WebSocket未连接，无法发送消息');
         }
+
+        console.error('[协作API] WebSocket未连接，无法发送消息:', message && message.type);
+        return false;
     }
     
     /**

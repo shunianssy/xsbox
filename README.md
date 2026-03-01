@@ -1,6 +1,6 @@
 # Xsbox
 
-这是一个实验性项目
+这是一个实验性项目，基于[TurboWarp](https://github.com/TurboWarp)的scratch多人协作解决方案，同时也是一个开源项目，欢迎提交pr和issue
 
 ## 介绍
 
