@@ -91,6 +91,12 @@ const CollaborationManager = forwardRef(({ vm, onCollaborationStart, onCollabora
     const autoSyncTimerRef = useRef(null);
     // 远程合并定时器
     const remoteMergeTimerRef = useRef(null);
+    // 是否正在执行同步（避免并发同步导致状态错乱）
+    const syncInProgressRef = useRef(false);
+    // 同步期间是否收到新的本地/远程变更（用于补偿同步）
+    const resyncRequestedRef = useRef(false);
+    // 本地变更状态引用（避免异步闭包读取到旧状态）
+    const hasLocalChangesRef = useRef(false);
 
     // 暴露方法给父组件调用
     useImperativeHandle(ref, () => ({
@@ -122,6 +128,11 @@ const CollaborationManager = forwardRef(({ vm, onCollaborationStart, onCollabora
     useEffect(() => {
         connectionStatusRef.current = connectionStatus;
     }, [connectionStatus]);
+
+    // 更新本地变更状态引用
+    useEffect(() => {
+        hasLocalChangesRef.current = hasLocalChanges;
+    }, [hasLocalChanges]);
 
     // 更新回调引用
     useEffect(() => {
@@ -639,105 +650,174 @@ const CollaborationManager = forwardRef(({ vm, onCollaborationStart, onCollabora
             return;
         }
 
-        if (syncStatus === 'syncing') {
+        // 避免并发同步：若已有同步在执行，仅标记“需要再同步一次”
+        if (syncInProgressRef.current) {
+            resyncRequestedRef.current = true;
             return;
         }
 
-        // 拖拽期间不打断，稍后重试
-        if (checkDraggingState()) {
-            await waitForDragEnd();
-        }
-
-        const currentVm = vmRef.current;
-        const projectJSON = getCurrentProjectJSON();
-        if (!currentVm || !projectJSON) {
-            return;
-        }
-
-        const hasPending = pendingRemoteChanges.current.length > 0;
-        const hasLocal = Boolean(
-            hasLocalChanges ||
-            localChangesCount.current > 0 ||
-            (lastSyncedJSON.current && lastSyncedJSON.current !== projectJSON)
-        );
-
-        if (!hasPending && !hasLocal) {
-            return;
-        }
-
+        syncInProgressRef.current = true;
+        resyncRequestedRef.current = false;
         setSyncStatus('syncing');
-        console.log(`[协作] 后台同步开始，来源: ${source}, local=${hasLocal}, remote=${hasPending}`);
+
+        let hasError = false;
 
         try {
-            // 上传本地修改
-            if (hasLocal) {
-                collaborationAPI.send({
-                    type: 'manual_sync',
-                    data: {
-                        projectJSON: projectJSON,
-                        targetId: currentVm && currentVm.editingTarget ? currentVm.editingTarget.id : null,
-                        timestamp: Date.now(),
-                        userId: currentUserIdRef.current,
-                        clientId: currentClientIdRef.current
-                    }
-                });
-            }
-
-            // 自动合并远程修改
-            const pendingChanges = pendingRemoteChanges.current;
-            if (pendingChanges.length > 0) {
-                let mergedRemoteJSON = projectJSON;
-                for (const remoteChange of pendingChanges) {
-                    mergedRemoteJSON = mergeProjectJSON(mergedRemoteJSON, remoteChange.projectJSON);
+            // 允许在一次调用里补偿执行多轮（处理同步期间新增的改动）
+            while (isCollaboratingRef.current) {
+                // 拖拽期间不打断，稍后重试
+                if (checkDraggingState()) {
+                    await waitForDragEnd();
                 }
 
-                isApplyingRemoteChange.current = true;
-                try {
-                    const result = await applyRemoteChangesIncrementally(mergedRemoteJSON);
-                    if (result.needFullLoad) {
-                        const workspaceState = getWorkspaceState();
-                        await currentVm.loadProject(mergedRemoteJSON);
-                        restoreWorkspaceState(workspaceState);
-                    }
-                } finally {
-                    setTimeout(() => {
-                        isApplyingRemoteChange.current = false;
-                    }, WORKSPACE_RESTORE_DELAY);
+                const currentVm = vmRef.current;
+                const projectJSON = getCurrentProjectJSON();
+                if (!currentVm || !projectJSON) {
+                    break;
                 }
 
-                pendingRemoteChanges.current = [];
-                setHasPendingRemoteChanges(false);
+                const hasPending = pendingRemoteChanges.current.length > 0;
+                const hasLocal = Boolean(
+                    hasLocalChangesRef.current ||
+                    localChangesCount.current > 0 ||
+                    (lastSyncedJSON.current && lastSyncedJSON.current !== projectJSON)
+                );
+
+                if (!hasPending && !hasLocal) {
+                    break;
+                }
+
+                console.log(`[协作] 后台同步开始，来源: ${source}, local=${hasLocal}, remote=${hasPending}`);
+
+                let syncedSnapshot = lastSyncedJSON.current;
+                let uploadedLocalSnapshot = null;
+
+                // 上传本地修改
+                if (hasLocal) {
+                    collaborationAPI.send({
+                        type: 'manual_sync',
+                        data: {
+                            projectJSON: projectJSON,
+                            targetId: currentVm && currentVm.editingTarget ? currentVm.editingTarget.id : null,
+                            timestamp: Date.now(),
+                            userId: currentUserIdRef.current,
+                            clientId: currentClientIdRef.current
+                        }
+                    });
+                    uploadedLocalSnapshot = projectJSON;
+                    syncedSnapshot = projectJSON;
+                }
+
+                // 自动合并远程修改（先取快照，避免同步中新增消息被误清空）
+                const pendingChanges = pendingRemoteChanges.current.splice(0, pendingRemoteChanges.current.length);
+                if (pendingChanges.length > 0) {
+                    let mergedRemoteJSON = projectJSON;
+                    for (const remoteChange of pendingChanges) {
+                        mergedRemoteJSON = mergeProjectJSON(mergedRemoteJSON, remoteChange.projectJSON);
+                    }
+
+                    isApplyingRemoteChange.current = true;
+                    try {
+                        const result = await applyRemoteChangesIncrementally(mergedRemoteJSON);
+                        if (result.needFullLoad) {
+                            const workspaceState = getWorkspaceState();
+                            await currentVm.loadProject(mergedRemoteJSON);
+                            restoreWorkspaceState(workspaceState);
+                        }
+                    } finally {
+                        setTimeout(() => {
+                            isApplyingRemoteChange.current = false;
+                        }, WORKSPACE_RESTORE_DELAY);
+                    }
+
+                    syncedSnapshot = getCurrentProjectJSON() || mergedRemoteJSON;
+                }
+
+                const currentJSONAfterSync = getCurrentProjectJSON();
+                if (syncedSnapshot) {
+                    lastSyncedJSON.current = syncedSnapshot;
+                } else if (currentJSONAfterSync) {
+                    lastSyncedJSON.current = currentJSONAfterSync;
+                }
+
+                // 同步过程中若发生新编辑，需要再补偿同步一次
+                if (
+                    uploadedLocalSnapshot &&
+                    currentJSONAfterSync &&
+                    uploadedLocalSnapshot !== currentJSONAfterSync
+                ) {
+                    resyncRequestedRef.current = true;
+                }
+
+                const stillHasPending = pendingRemoteChanges.current.length > 0;
+                const stillHasLocal = Boolean(
+                    localChangesCount.current > 0 ||
+                    (lastSyncedJSON.current && currentJSONAfterSync && lastSyncedJSON.current !== currentJSONAfterSync)
+                );
+
+                if (!stillHasPending && !stillHasLocal) {
+                    localChangesCount.current = 0;
+                    hasLocalChangesRef.current = false;
+                    setHasLocalChanges(false);
+                    setHasPendingRemoteChanges(false);
+                } else {
+                    hasLocalChangesRef.current = stillHasLocal;
+                    setHasLocalChanges(stillHasLocal);
+                    setHasPendingRemoteChanges(stillHasPending);
+                }
+
+                if (!resyncRequestedRef.current) {
+                    break;
+                }
+
+                // 开始下一轮前复位标志，若又出现新改动会再次置为 true
+                resyncRequestedRef.current = false;
             }
 
-            lastSyncedJSON.current = getCurrentProjectJSON();
-            localChangesCount.current = 0;
-            setHasLocalChanges(false);
-            setSyncStatus('synced');
-
-            if (!silent) {
-                toastManager.success('同步成功', 1500);
+            if (!hasError) {
+                setSyncStatus('synced');
+                if (!silent) {
+                    toastManager.success('同步成功', 1500);
+                }
             }
         } catch (error) {
+            hasError = true;
             console.error('[协作] 后台同步失败:', error);
             setSyncStatus('error');
             if (!silent) {
                 toastManager.error(`同步失败: ${error.message}`, 2500);
             }
+        } finally {
+            syncInProgressRef.current = false;
+
+            // 若同步结束后还有新变化，安排一次快速补偿同步
+            if (isCollaboratingRef.current && (resyncRequestedRef.current || pendingRemoteChanges.current.length > 0 || localChangesCount.current > 0)) {
+                clearAutoSyncTimer();
+                autoSyncTimerRef.current = setTimeout(() => {
+                    autoSyncTimerRef.current = null;
+                    handleBackgroundSync(true, 'resync');
+                }, 50);
+            }
         }
     }, [
-        syncStatus,
-        hasLocalChanges,
         checkDraggingState,
         waitForDragEnd,
         getCurrentProjectJSON,
         mergeProjectJSON,
         applyRemoteChangesIncrementally,
         getWorkspaceState,
-        restoreWorkspaceState
+        restoreWorkspaceState,
+        clearAutoSyncTimer
     ]);
 
     const scheduleAutoSync = useCallback((reason = 'local-change') => {
         if (!isCollaboratingRef.current) return;
+
+        // 同步进行中只打标，不额外并发执行
+        if (syncInProgressRef.current) {
+            resyncRequestedRef.current = true;
+            return;
+        }
 
         clearAutoSyncTimer();
         autoSyncTimerRef.current = setTimeout(() => {
@@ -748,6 +828,12 @@ const CollaborationManager = forwardRef(({ vm, onCollaborationStart, onCollabora
 
     const scheduleRemoteMerge = useCallback(() => {
         if (!isCollaboratingRef.current) return;
+
+        // 同步进行中只打标，待当前轮结束后补偿执行
+        if (syncInProgressRef.current) {
+            resyncRequestedRef.current = true;
+            return;
+        }
 
         clearRemoteMergeTimer();
         remoteMergeTimerRef.current = setTimeout(() => {
@@ -767,6 +853,7 @@ const CollaborationManager = forwardRef(({ vm, onCollaborationStart, onCollabora
 
         if (lastSyncedJSON.current !== projectJSON) {
             localChangesCount.current++;
+            hasLocalChangesRef.current = true;
             setHasLocalChanges(true);
             scheduleAutoSync('local-change');
             console.log('[协作] 检测到本地变更，变更计数:', localChangesCount.current);
@@ -926,6 +1013,7 @@ const CollaborationManager = forwardRef(({ vm, onCollaborationStart, onCollabora
             
             // 重置本地变更状态
             localChangesCount.current = 0;
+            hasLocalChangesRef.current = false;
             setHasLocalChanges(false);
             
             // 恢复工作区状态
